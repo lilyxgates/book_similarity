@@ -118,14 +118,19 @@ print("\nCollected book data:\n", df_books.head())
 
 ###############################
 ### COMPUTE TEXT SIMILARITY ###
+#### DESCRIPTION & GENRES #####
 ###############################
 
-# Fill missing descriptions with an empty string
+# Fill missing values
 df_books['Description'] = df_books['Description'].fillna('')
+df_books['Genres'] = df_books['Genres'].fillna('')
 
-# TF-IDF Vectorization for book descriptions
+# Combine description and genre into a single text field
+df_books['TextFeatures'] = df_books['Description'] + ' ' + df_books['Genres']
+
+# TF-IDF Vectorization for combined metadata
 vectorizer = TfidfVectorizer(stop_words='english')
-X = vectorizer.fit_transform(df_books['Description'])
+X = vectorizer.fit_transform(df_books['TextFeatures'])  # Use combined text data
 
 # Compute Cosine Similarity
 cos_sim_matrix = 1 - scipy.spatial.distance.cdist(X.toarray(), X.toarray(), metric='cosine')
@@ -133,9 +138,177 @@ cos_sim_matrix = 1 - scipy.spatial.distance.cdist(X.toarray(), X.toarray(), metr
 # Convert to DataFrame for easier analysis
 similarity_df = pd.DataFrame(cos_sim_matrix, index=df_books['Title'], columns=df_books['Title'])
 
+
 ######################################
 ### FIND TOP 10 MOST SIMILAR BOOKS ###
 ######################################
+
+# NEW... 
+def get_top_similar_books(target_book, df, book_df, top_n=10):
+    """
+    Finds the top N most similar books to a given book, excluding books by the same author.
+
+    Args:
+        target_book (str): The book title to find similarities for.
+        df (pd.DataFrame): The cosine similarity DataFrame.
+        book_df (pd.DataFrame): DataFrame containing book details.
+        top_n (int): Number of top similar books to retrieve.
+
+    Returns:
+        pd.DataFrame: A DataFrame of top similar books.
+    """
+    if target_book not in df.index:
+        print(f"Book '{target_book}' not found in the similarity matrix.")
+        return pd.DataFrame()
+    
+    # Get the author(s) of the target book (handle missing values safely)
+    target_author = book_df.loc[book_df['Title'] == target_book, 'Authors']
+    if target_author.empty:
+        print(f"Warning: No author found for '{target_book}'")
+        target_author = "Unknown"
+    else:
+        target_author = target_author.iloc[0].lower()  # Normalize case
+
+    # Get similarity scores for the target book, sort in descending order
+    similar_books = df[target_book].sort_values(ascending=False).drop(target_book)  # Drop itself
+
+    # Filter books that have a different author
+    filtered_books = []
+    for book in similar_books.index:
+        book_author = book_df.loc[book_df['Title'] == book, 'Authors']
+        if book_author.empty:
+            continue  # Skip if no author data
+        book_author = book_author.iloc[0].lower()  # Normalize case
+        
+        if book_author != target_author:  # Compare case-insensitively
+            filtered_books.append((book, similar_books[book]))
+
+    # Convert to DataFrame and return top N
+    similar_df = pd.DataFrame(filtered_books, columns=['Title', 'Similarity Score']).head(top_n)
+    return similar_df.merge(book_df, on='Title', how='left')
+
+# Print results for each target book
+for target in target_books:
+    print(f"\nTop 10 Books Similar to '{target}' (Excluding Same Author):\n")
+    similar_books = get_top_similar_books(target, similarity_df, df_books)
+
+    if not similar_books.empty:
+        # Iterate through DataFrame rows and print top similar books along with metadata
+        for rank, (index, row) in enumerate(similar_books.iterrows(), start=1):
+            title = row['Title']
+            author = row['Authors']
+            genre = row['Genres']
+            description = row['Description']
+            pub_year = row.get('Published Year', 'Unknown')  # Handles missing values
+            avg_rating = row.get('Average Rating', 'No Rating')  # Handles missing values
+            similarity_score = row['Similarity Score']  # Assuming this column exists
+
+            print(f"{rank}. {title} (Similarity Score: {similarity_score:.4f})")
+            print(f"   Author: {author}")
+            print(f"   Genre: {genre}")
+            print(f"   Published: {pub_year}")
+            print(f"   Average Rating: {avg_rating}")
+            print(f"   Description: {description[:250]}...")  # Truncate long descriptions
+            print("-" * 80)  # Separator for readability
+    else:
+        print("No similar books found.")
+
+
+# OPTION: Print as Table: Rank, Similarity Score, Title, Author
+def print_top_similar_books_simple(target_books, similarity_df, book_df, top_n=10):
+    for target in target_books:
+        print(f"\nTop {top_n} Books Similar to '{target}' (Excluding Same Author):")
+        similar_books = get_top_similar_books(target, similarity_df, book_df, top_n)
+        
+        if similar_books.empty:
+            print("No similar books found.")
+            continue
+
+        # Print header
+        print(f"{'Rank':<5} {'Similarity Score':<20} {'Title':<40} {'Author':<30}")
+        print("-" * 100)
+
+        # Iterate over rows and print formatted output
+        for index, row in similar_books.iterrows():
+            rank = row.get("Rank", index + 1)
+            title = row["Title"]
+            author = row["Authors"]
+            similarity_score = row["Similarity Score"]
+            print(f"{rank:<5} {similarity_score:<20.4f} {title:<40} {author:<30}")
+
+# Example usage:
+target_books = [
+    "Harry Potter and the Chamber of Secrets",
+    "To Kill a Mockingbird",
+    "The Great Gatsby"
+]
+print_top_similar_books_simple(target_books, similarity_df, df_books)
+
+
+# OPTION: Print as List
+
+def print_similar_books(target_books, similarity_df, df_books, top_n=10):
+    for target in target_books:
+        if target not in similarity_df.index:
+            print(f"\nNo similar books found for '{target}'.")
+            continue
+
+        print(f"\nTop {top_n} Books Similar to '{target}' (Excluding Same Author):")
+        similar_books = get_top_similar_books(target, similarity_df, df_books, top_n)
+
+        if not similar_books.empty:
+            for rank, row in similar_books.iterrows():
+                title = row["Title"]
+                similarity_score = row["Similarity Score"]
+                print(f"{rank}. {title} (Similarity Score: {similarity_score:.4f})")
+        else:
+            print("No similar books found.")
+
+# Example usage
+target_books = [
+    "Harry Potter and the Chamber of Secrets",
+    "To Kill a Mockingbird",
+    "The Great Gatsby"
+]
+print_similar_books(target_books, similarity_df, df_books)
+
+
+# OPTION: Return as Pandas Dataframe
+import pandas as pd
+
+def get_top_similar_books(target_book, similarity_df, df_books, top_n=10):
+    if target_book not in similarity_df.index:
+        return pd.DataFrame(columns=["Rank", "Title", "Author", "Genres", "Similarity Score"])
+
+    # Get similarity scores for target book
+    similar_scores = similarity_df[target_book].sort_values(ascending=False)
+    
+    # Exclude the target book itself
+    similar_scores = similar_scores.drop(target_book)
+
+    # Merge similarity scores with book metadata
+    similar_books = df_books.set_index("Title").loc[similar_scores.index].reset_index()
+    similar_books["Similarity Score"] = similar_scores.values
+    
+    # Exclude books with the same author as the target book
+    target_author = df_books[df_books["Title"] == target_book]["Author"].values[0]
+    similar_books = similar_books[similar_books["Author"] != target_author]
+    
+    # Keep only the top N similar books
+    similar_books = similar_books.head(top_n)
+
+    # Add a ranking column
+    similar_books.insert(0, "Rank", range(1, len(similar_books) + 1))
+
+    return similar_books[["Rank", "Title", "Author", "Genres", "Similarity Score"]]
+
+# Example usage
+target_book = "Harry Potter and the Chamber of Secrets"
+df_top_similar = get_top_similar_books(target_book, similarity_df, df_books)
+print(df_top_similar)
+
+
+# OLD...
 
 def get_top_similar_books(target_book, df, book_df, top_n=10):
     """
@@ -182,3 +355,5 @@ for target in target_books:
             print(f"{rank}. {title} (Similarity Score: {similarity_score:.4f})")
     else:
         print("No similar books found.")
+
+        
