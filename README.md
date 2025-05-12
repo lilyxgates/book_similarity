@@ -1,4 +1,6 @@
 # Similarity Assessment for Book Recommendation System
+*Written by Lily Gates*
+* March 2025*
 
 ## Description
 This project explores similarity assessment techniques in data science, with a particular focus on comparing books based on their content. By utilizing methods like **cosine similarity** and **Euclidean distance**, this project enables a bookstore manager to optimize book displays, recommendations, and inventory based on content or genre similarity. The ultimate goal is to provide actionable insights that can be easily interpreted by stakeholders to make data-driven decisions.
