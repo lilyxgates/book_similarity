@@ -8,7 +8,7 @@ import yaml  # For holding my API key
 import requests
 import time  # For sleep requests
 import urllib.parse  # For dealing with spaces in book titles search
-import scipy.spatial.distance
+import scipy
 from sklearn.feature_extraction.text import TfidfVectorizer  # Analyze text as numeric data to calculate similarity
 
 
